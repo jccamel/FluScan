@@ -1,37 +1,30 @@
-#!/usr/bin/python
-# coding=utf-8
+#!/usr/bin/env python
+# -*- encoding: utf-8 -*-
 
 # Uso de la API maxmind
 # https://dev.maxmind.com/geoip/geoip2/web-services/#IP_Geolocation_Usage
 
+import pygeoip
 import geoip2.webservice
 
 
 class GeoLocate(object):
     """
     GeoIP2 Precision Services
-    1: Insights - Insights service provides our most accurate information about the location of an IP address,
+    Insights - Insights service provides our most accurate information about the location of an IP address,
         pinpointing it to the zip or postal code level. It includes confidence factors for geolocation data,
         describes the ISP/Organization, and indicates the type of user behind the IP.
-    2: City - City service provides our most accurate information about the location of an IP address
+    City - City service provides our most accurate information about the location of an IP address
         to the zip or postal code level and identifies the associated ISP or organization.
-    3: Country - Country service is best for customers who only need to know the country of an IP address.
+    Country - Country service is best for customers who only need to know the country of an IP address.
+    db - Hard disk Database request
     """
     def __init__(self, ip, select):
+        self.ip = ip
         self.sel = select
+        self.response = ''
         self.dicc = {}
-        # <User ID> is your ID user
-        # <License key>  is your lincese key
-        self.client = geoip2.webservice.Client(<User ID>, '<License key>')
-        if self.sel == 1:
-            self.response = self.client.insights(ip)
-        elif self.sel == 2:
-            self.response = self.client.city(ip)
-        elif self.sel == 3:
-            self.response = self.client.country(ip)
-        else:
-            pass
-        self.query_remain = self.response.maxmind.queries_remaining
+        self.query_remain = 0
 
     def __del__(self):
         pass
@@ -58,6 +51,7 @@ class GeoLocate(object):
         # ***Deprecated***. Please see our GeoIP2 Anonymous IP database to determine whether the
         # IP address is used by an anonymizing service. (boolean)
         self.dicc['is_anonymous_proxy'] = str(self.response.traits.is_anonymous_proxy)
+        self.query_remain = self.response.maxmind.queries_remaining
 
     def __city(self):
         self.__country()
@@ -104,18 +98,34 @@ class GeoLocate(object):
         self.dicc['user_type'] = self.response.traits.user_type
 
     def __dataquery(self):
-        if self.sel == 1:
-            self.__country()
-            self.__city()
-            self.__insights()
-            print "Remain insight queries: %s\n" % str(self.query_remain)
-        elif self.sel == 2:
-            self.__city()
-            self.__country()
-            print "Remain city queries: %s\n" % str(self.query_remain)
-        elif self.sel == 3:
-            self.__country()
-            print "Remain country queries: %s\n" % str(self.query_remain)
+
+        if self.sel != 'db':
+            client = geoip2.webservice.Client({USER}, {KEY}) # User and Key MAXMIND Acount
+            if self.sel == 'insights':
+                self.response = client.insights(self.ip)
+                self.__country()
+                self.__city()
+                self.__insights()
+                print "Remain insight queries: %s\n" % str(self.query_remain)
+            elif self.sel == 'city':
+                self.response = client.city(self.ip)
+                self.__city()
+                self.__country()
+                print "Remain city queries: %s\n" % str(self.query_remain)
+            elif self.sel == 'country':
+                self.response = client.country(self.ip)
+                self.__country()
+                print "Remain country queries: %s\n" % str(self.query_remain)
+        elif self.sel == "db":
+            try:
+                geoDb = pygeoip.GeoIP('GeoIP/GeoLiteCity.dat')
+                ip_dictionary_values = geoDb.record_by_addr(self.ip)
+                for value in ip_dictionary_values.items():
+                    self.dicc[value[0]] = str(value[1])
+            except:
+                print "error"
+        else:
+            pass
 
     def geolocate_doc(self):
         self.__dataquery()
