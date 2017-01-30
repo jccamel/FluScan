@@ -2,6 +2,7 @@
 # coding=utf-8
 
 import datetime
+import ipaddress
 from struct import unpack
 from socket import AF_INET, inet_pton
 from geolocate import GeoLocate
@@ -47,6 +48,21 @@ def ip_add(_ip):
     else:
         return _ip
 
+    
+def cloudflare_iptest(iptest):
+    from ipaddress import IPv4Address, IPv4Network
+
+    f = file("Cloudflare/IPv4Range", "r")
+    ranges = f.read().splitlines()
+    f.close()
+    del f
+
+    for range in ranges:
+        if IPv4Address(iptest) in IPv4Network(range):
+            print str(iptest) + "---- is in ------->" + str(range)
+            return True
+    return False
+
 
 def main(_ip1, _ip2):
     _ip3 = _ip1
@@ -54,22 +70,25 @@ def main(_ip1, _ip2):
     conexion = ConexionMongoDB()
     conexion.open_conexion()
     while _ip3_prev != _ip2:
-        if not ip_private(_ip3):
-            dictionary = {}
-            document = []
-            geo = GeoLocate(_ip3, 3)
-            dh = DataHost(_ip3)
-            dictionary['data-client-datetime'] = datetime.datetime.utcnow()
-            dictionary['data-client-geocode'] = geo.geolocate_doc()
-            dictionary['data-client-portscan'] = dh.ports()
-            document.append(dictionary)
-            del dh
-            del geo
-            conexion.insert_doc('client', document)
+        if not cloudflare_iptest(realip):
+            if not ip_private(_ip3):
+                dictionary = {}
+                document = []
+                geo = GeoLocate(_ip3, 'db') # Select depth of GeoIP {insights, city, country, db}
+                dh = DataHost(_ip3)
+                dictionary['data-client-datetime'] = datetime.datetime.utcnow()
+                dictionary['data-client-geocode'] = geo.geolocate_doc()
+                dictionary['data-client-portscan'] = dh.ports()
+                document.append(dictionary)
+                del dh
+                del geo
+                conexion.insert_doc('client', document)
+            else:
+                print "IP %s PRIVATE, not scaned" % _ip3
+            _ip3_prev = _ip3
+            _ip3 = ip_add(_ip3)
         else:
-            print "IP %s PRIVATE, not scaned" % _ip3
-        _ip3_prev = _ip3
-        _ip3 = ip_add(_ip3)
+            print 'IP %s in range of Claudflare' % _ip3
     conexion.close_conexion()
     del conexion
 
